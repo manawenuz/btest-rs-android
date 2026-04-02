@@ -24,6 +24,12 @@ jobs:
           echo "JAVA_HOME=/opt/java" >> $GITHUB_ENV
           echo "/opt/java/bin" >> $GITHUB_PATH
 
+      - name: Install Gradle
+        run: |
+          wget -q https://github.com/gradle/gradle/releases/download/v8.11.1/gradle-8.11.1-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          echo "/opt/gradle-8.11.1/bin" >> $GITHUB_PATH
+
       - name: Setup Android SDK
         run: |
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdtools.zip
@@ -41,10 +47,10 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Build release APK
-        run: ./gradlew assembleRelease
+        run: gradle assembleRelease
         env:
           KEYSTORE_FILE: release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
