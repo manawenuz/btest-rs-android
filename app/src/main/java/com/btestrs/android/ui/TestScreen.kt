@@ -1,5 +1,6 @@
 package com.btestrs.android.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -15,24 +17,36 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.btestrs.android.BtestConfig
+import com.btestrs.android.SavedCredential
 import com.btestrs.android.TestViewModel
 
 @Composable
@@ -43,7 +57,13 @@ fun TestScreen(viewModel: TestViewModel, modifier: Modifier = Modifier) {
     val summary by viewModel.summary.collectAsState()
     val error by viewModel.error.collectAsState()
     val localCpu by viewModel.localCpu.collectAsState()
+    val savedCredentials by viewModel.savedCredentials.collectAsState()
+    val saveCredentials by viewModel.saveCredentials.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.init(context)
+    }
 
     Column(
         modifier = modifier
@@ -58,8 +78,28 @@ fun TestScreen(viewModel: TestViewModel, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold
         )
 
+        // Saved credentials dropdown
+        if (savedCredentials.isNotEmpty()) {
+            CredentialSelector(savedCredentials, isRunning, viewModel)
+        }
+
         // Config form
         ConfigSection(config, isRunning, viewModel)
+
+        // Save credentials checkbox
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable(enabled = !isRunning) {
+                viewModel.saveCredentials.value = !saveCredentials
+            }
+        ) {
+            Checkbox(
+                checked = saveCredentials,
+                onCheckedChange = { viewModel.saveCredentials.value = it },
+                enabled = !isRunning
+            )
+            Text("Save credentials", style = MaterialTheme.typography.bodyMedium)
+        }
 
         // Start/Stop button
         Button(
@@ -109,6 +149,81 @@ fun TestScreen(viewModel: TestViewModel, modifier: Modifier = Modifier) {
         // Stats
         if (intervals.isNotEmpty()) {
             StatsSection(intervals, summary, localCpu)
+        }
+    }
+}
+
+@Composable
+private fun CredentialSelector(
+    credentials: List<SavedCredential>,
+    isRunning: Boolean,
+    viewModel: TestViewModel
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        OutlinedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !isRunning) { expanded = true }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Saved servers (${credentials.size})",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    if (expanded) "\u25B2" else "\u25BC",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            credentials.forEach { cred ->
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(cred.host, fontWeight = FontWeight.Medium)
+                                Text(
+                                    cred.username,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                            }
+                            Text(
+                                "\u2715",
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .clickable {
+                                        viewModel.deleteCredential(cred)
+                                    }
+                                    .padding(8.dp)
+                            )
+                        }
+                    },
+                    onClick = {
+                        viewModel.selectCredential(cred)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }

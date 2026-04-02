@@ -15,14 +15,40 @@ class TestViewModel : ViewModel() {
     val summary = MutableStateFlow<BtestSummary?>(null)
     val error = MutableStateFlow<String?>(null)
     val localCpu = MutableStateFlow(0)
+    val savedCredentials = MutableStateFlow<List<SavedCredential>>(emptyList())
+    val saveCredentials = MutableStateFlow(true)
 
     private var runner: BtestRunner? = null
     private var job: Job? = null
     private var cpuJob: Job? = null
     private val cpuMonitor = CpuMonitor()
+    private var credentialStore: CredentialStore? = null
+
+    fun init(context: Context) {
+        if (credentialStore != null) return
+        val store = CredentialStore(context)
+        credentialStore = store
+        savedCredentials.value = store.loadAll()
+
+        // Restore last used credentials
+        store.loadLast()?.let { last ->
+            config.value = config.value.copy(
+                host = last.host,
+                username = last.username,
+                password = last.password
+            )
+        }
+    }
 
     fun start(context: Context) {
         if (isRunning.value) return
+
+        // Save credentials if checkbox is checked
+        if (saveCredentials.value) {
+            val cfg = config.value
+            credentialStore?.save(SavedCredential(cfg.host, cfg.username, cfg.password))
+            savedCredentials.value = credentialStore?.loadAll() ?: emptyList()
+        }
 
         intervals.value = emptyList()
         summary.value = null
@@ -69,6 +95,19 @@ class TestViewModel : ViewModel() {
         cpuJob?.cancel()
         cpuJob = null
         isRunning.value = false
+    }
+
+    fun selectCredential(credential: SavedCredential) {
+        config.value = config.value.copy(
+            host = credential.host,
+            username = credential.username,
+            password = credential.password
+        )
+    }
+
+    fun deleteCredential(credential: SavedCredential) {
+        credentialStore?.delete(credential)
+        savedCredentials.value = credentialStore?.loadAll() ?: emptyList()
     }
 
     fun updateConfig(transform: (BtestConfig) -> BtestConfig) {
