@@ -7,33 +7,45 @@ on:
 
 jobs:
   build:
-    runs-on: docker
-    container:
-      image: thyrlian/android-sdk:latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
         run: |
-          apt-get update -qq && apt-get install -y -qq openjdk-17-jdk-headless file > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openjdk-17-jdk-headless > /dev/null
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses 2>/dev/null || true
+      - name: Set up Android SDK
+        run: |
+          export ANDROID_SDK_ROOT="${HOME}/android-sdk"
+          mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools"
+          cd "${ANDROID_SDK_ROOT}/cmdline-tools"
+          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O tools.zip
+          unzip -q tools.zip
+          mv cmdline-tools latest
+          rm tools.zip
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
+          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "${ANDROID_SDK_ROOT}/platform-tools" >> $GITHUB_PATH
+
+      - name: Accept licenses and install SDK components
+        run: |
+          yes | sdkmanager --licenses 2>/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null
 
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
-        env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
       - name: Build release APK
         run: ./gradlew assembleRelease
         env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           KEYSTORE_FILE: release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -46,21 +58,23 @@ jobs:
           FORGEJO_URL: https://git.tbs.amn.gg
           REPO: manawenuz/btest-rs-anrdoid
         run: |
-          # Rename APKs with version
           cp app/build/outputs/apk/release/app-release.apk "btest-${TAG}-release.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "btest-${TAG}-debug.apk"
 
-          NOTES="Automated build for ${TAG}.
+          NOTES=$(cat <<NOTES_EOF
+          Automated build for ${TAG}.
 
           ## Artifacts
           - \`btest-${TAG}-release.apk\` — signed, minified release build
-          - \`btest-${TAG}-debug.apk\` — debug build"
+          - \`btest-${TAG}-debug.apk\` — debug build
+          NOTES_EOF
+          )
 
           # Create release
           RELEASE_ID=$(curl -sf -X POST "${FORGEJO_URL}/api/v1/repos/${REPO}/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: token ${GITEA_TOKEN}" \
-            -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":$(echo "$NOTES" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}" \
+            -d "$(python3 -c "import json; print(json.dumps({'tag_name':'${TAG}','name':'${TAG}','body':'''${NOTES}'''}))")" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 
           echo "Created release ID: ${RELEASE_ID}"
