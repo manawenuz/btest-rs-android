@@ -96,7 +96,7 @@ fun HistoryScreen(viewModel: HistoryViewModel, modifier: Modifier = Modifier) {
                 totalCount = runs.size,
                 onSelectAll = { viewModel.selectAll() },
                 onClearSelection = { viewModel.clearSelection() },
-                onExportCsv = { viewModel.exportCsv(context) },
+                onExportCsv = { viewModel.shareSelected(context) },
                 onDelete = { viewModel.deleteSelected() }
             )
         }

@@ -16,5 +16,6 @@ data class TestRunEntity(
     val txBytes: Long,
     val rxBytes: Long,
     val lost: Long,
-    val synced: Boolean = false
+    val synced: Boolean = false,
+    val remoteId: String? = null
 )

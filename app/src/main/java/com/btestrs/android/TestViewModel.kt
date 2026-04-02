@@ -147,7 +147,8 @@ class TestViewModel : ViewModel() {
                     val json = JsonExporter.exportSingle(run, intervals, deviceId)
                     val result = ResultPoster.postSingle(cfg.url, cfg.apiKey, json)
                     if (result.isSuccess) {
-                        dao?.markSynced(listOf(run.id))
+                        val remoteId = ResultPoster.parseRemoteId(result.getOrNull())
+                        dao?.markSynced(run.id, remoteId)
                     }
                 }
             } catch (_: Exception) { }

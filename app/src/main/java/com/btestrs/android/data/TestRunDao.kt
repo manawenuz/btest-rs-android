@@ -39,6 +39,6 @@ interface TestRunDao {
     @Query("SELECT * FROM test_runs WHERE synced = 0 ORDER BY timestamp ASC")
     suspend fun getUnsyncedRuns(): List<TestRunEntity>
 
-    @Query("UPDATE test_runs SET synced = 1 WHERE id IN (:ids)")
-    suspend fun markSynced(ids: List<Long>)
+    @Query("UPDATE test_runs SET synced = 1, remoteId = :remoteId WHERE id = :id")
+    suspend fun markSynced(id: Long, remoteId: String?)
 }

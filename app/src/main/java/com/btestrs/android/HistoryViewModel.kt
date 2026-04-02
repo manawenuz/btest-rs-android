@@ -114,7 +114,8 @@ class HistoryViewModel : ViewModel() {
                     val json = JsonExporter.exportSingle(run, intervals, deviceId)
                     val result = ResultPoster.postSingle(cfg.url, cfg.apiKey, json)
                     if (result.isSuccess) {
-                        dao?.markSynced(listOf(run.id))
+                        val remoteId = ResultPoster.parseRemoteId(result.getOrNull())
+                        dao?.markSynced(run.id, remoteId)
                         successCount++
                     }
                 }
@@ -192,31 +193,43 @@ class HistoryViewModel : ViewModel() {
         detailIntervals.value = emptyList()
     }
 
-    fun exportCsv(context: Context) {
+    fun shareSelected(context: Context) {
         val ids = selectedIds.value.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
             val selectedRuns = dao?.getRunsByIds(ids) ?: return@launch
-            val intervals = dao?.getIntervalsForRuns(ids) ?: return@launch
-            val intervalsByRun = intervals.groupBy { it.runId }
-            val csv = CsvExporter.export(selectedRuns, intervalsByRun)
-            shareCsv(context, csv)
+            val cfg = rendererConfig.value
+
+            // If dashboard configured and all selected runs have remote IDs, share URLs
+            if (cfg.isConfigured && selectedRuns.all { it.remoteId != null }) {
+                val baseUrl = cfg.url.trimEnd('/')
+                val urls = selectedRuns.map { "$baseUrl/view/${it.remoteId}" }
+                val text = if (urls.size == 1) urls.first()
+                    else urls.joinToString("\n")
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share results"))
+            } else {
+                // Fallback to CSV export
+                val intervals = dao?.getIntervalsForRuns(ids) ?: return@launch
+                val intervalsByRun = intervals.groupBy { it.runId }
+                val csv = CsvExporter.export(selectedRuns, intervalsByRun)
+                val file = File(context.cacheDir, "btest-export.csv")
+                file.writeText(csv)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Export CSV"))
+            }
         }
     }
 
     fun clearStatusMessage() {
         statusMessage.value = null
-    }
-
-    private fun shareCsv(context: Context, csv: String) {
-        val file = File(context.cacheDir, "btest-export.csv")
-        file.writeText(csv)
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/csv"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Export CSV"))
     }
 }
