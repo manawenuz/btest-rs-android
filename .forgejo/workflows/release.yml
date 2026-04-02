@@ -67,21 +67,38 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "btest-${TAG}-release.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "btest-${TAG}-debug.apk"
 
-          RELEASE_ID=$(curl -sf -X POST "${FORGEJO_URL}/api/v1/repos/${REPO}/releases" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":\"Automated build for ${TAG}.\\n\\n## Artifacts\\n- \`btest-${TAG}-release.apk\` — signed, minified release build\\n- \`btest-${TAG}-debug.apk\` — debug build\"}" \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          AUTH="Authorization: token ${GITEA_TOKEN}"
+          API="${FORGEJO_URL}/api/v1/repos/${REPO}/releases"
+          BODY="Automated build for ${TAG}.\n\n## Artifacts\n- btest-${TAG}-release.apk — signed, minified release build\n- btest-${TAG}-debug.apk — debug build"
 
-          echo "Created release ID: ${RELEASE_ID}"
+          # Check if release already exists for this tag
+          RELEASE_ID=$(curl -s "${API}/tags/${TAG}" -H "${AUTH}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
 
-          curl -sf -X POST "${FORGEJO_URL}/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=btest-${TAG}-release.apk" \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -F "attachment=@btest-${TAG}-release.apk"
+          if [ -n "$RELEASE_ID" ] && [ "$RELEASE_ID" != "" ]; then
+            echo "Release exists (ID: ${RELEASE_ID}), deleting old assets..."
+            ASSET_IDS=$(curl -s "${API}/${RELEASE_ID}/assets" -H "${AUTH}" | python3 -c "import sys,json; [print(a['id']) for a in json.load(sys.stdin)]" 2>/dev/null || true)
+            for aid in $ASSET_IDS; do
+              curl -s -X DELETE "${API}/${RELEASE_ID}/assets/${aid}" -H "${AUTH}"
+            done
+            # Update release body
+            curl -s -X PATCH "${API}/${RELEASE_ID}" -H "${AUTH}" -H "Content-Type: application/json" \
+              -d "{\"body\":\"${BODY}\"}" > /dev/null
+          else
+            echo "Creating new release..."
+            RELEASE_ID=$(curl -sf -X POST "${API}" \
+              -H "Content-Type: application/json" \
+              -H "${AUTH}" \
+              -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":\"${BODY}\"}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          fi
 
-          curl -sf -X POST "${FORGEJO_URL}/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=btest-${TAG}-debug.apk" \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -F "attachment=@btest-${TAG}-debug.apk"
+          echo "Release ID: ${RELEASE_ID}"
+
+          curl -sf -X POST "${API}/${RELEASE_ID}/assets?name=btest-${TAG}-release.apk" \
+            -H "${AUTH}" -F "attachment=@btest-${TAG}-release.apk"
+
+          curl -sf -X POST "${API}/${RELEASE_ID}/assets?name=btest-${TAG}-debug.apk" \
+            -H "${AUTH}" -F "attachment=@btest-${TAG}-debug.apk"
 
           echo "Uploaded both APKs to Forgejo release ${TAG}"
 
