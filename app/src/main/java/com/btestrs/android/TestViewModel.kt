@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class TestViewModel : ViewModel() {
@@ -15,9 +14,12 @@ class TestViewModel : ViewModel() {
     val intervals = MutableStateFlow<List<BtestResult>>(emptyList())
     val summary = MutableStateFlow<BtestSummary?>(null)
     val error = MutableStateFlow<String?>(null)
+    val localCpu = MutableStateFlow(0)
 
     private var runner: BtestRunner? = null
     private var job: Job? = null
+    private var cpuJob: Job? = null
+    private val cpuMonitor = CpuMonitor()
 
     fun start(context: Context) {
         if (isRunning.value) return
@@ -25,10 +27,17 @@ class TestViewModel : ViewModel() {
         intervals.value = emptyList()
         summary.value = null
         error.value = null
+        localCpu.value = 0
         isRunning.value = true
 
         val btestRunner = BtestRunner(context)
         runner = btestRunner
+
+        cpuJob = viewModelScope.launch {
+            cpuMonitor.monitor().collect { cpu ->
+                localCpu.value = cpu
+            }
+        }
 
         job = viewModelScope.launch {
             btestRunner.run(config.value).collect { output ->
@@ -45,12 +54,14 @@ class TestViewModel : ViewModel() {
                 }
             }
             isRunning.value = false
+            cpuJob?.cancel()
         }
     }
 
     fun stop() {
         runner?.stop()
         job?.cancel()
+        cpuJob?.cancel()
         isRunning.value = false
     }
 

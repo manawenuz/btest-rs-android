@@ -42,6 +42,7 @@ fun TestScreen(viewModel: TestViewModel, modifier: Modifier = Modifier) {
     val intervals by viewModel.intervals.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val error by viewModel.error.collectAsState()
+    val localCpu by viewModel.localCpu.collectAsState()
     val context = LocalContext.current
 
     Column(
@@ -107,7 +108,7 @@ fun TestScreen(viewModel: TestViewModel, modifier: Modifier = Modifier) {
 
         // Stats
         if (intervals.isNotEmpty()) {
-            StatsSection(intervals, summary)
+            StatsSection(intervals, summary, localCpu)
         }
     }
 }
@@ -246,7 +247,8 @@ private fun LiveSpeedDisplay(intervals: List<com.btestrs.android.BtestResult>) {
 @Composable
 private fun StatsSection(
     intervals: List<com.btestrs.android.BtestResult>,
-    summary: com.btestrs.android.BtestSummary?
+    summary: com.btestrs.android.BtestSummary?,
+    localCpu: Int
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -275,11 +277,9 @@ private fun StatsSection(
                 StatRow("RX bytes", formatBytes(totalRxBytes))
             }
 
-            // CPU from latest interval
-            val lastWithCpu = intervals.lastOrNull { it.localCpu != null }
-            lastWithCpu?.let {
-                StatRow("CPU (local/remote)", "${it.localCpu}% / ${it.remoteCpu ?: 0}%")
-            }
+            // CPU: local from app-side /proc/stat, remote from binary output
+            val remoteCpu = intervals.lastOrNull { it.remoteCpu != null && it.remoteCpu > 0 }?.remoteCpu ?: 0
+            StatRow("CPU (local/remote)", "${localCpu}% / ${remoteCpu}%")
 
             // Lost packets
             val lastWithLost = intervals.lastOrNull { it.lost != null }
