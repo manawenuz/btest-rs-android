@@ -1,8 +1,13 @@
 package com.btestrs.android
 
 import android.content.Context
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.btestrs.android.data.AppDatabase
+import com.btestrs.android.data.TestIntervalEntity
+import com.btestrs.android.data.TestRunDao
+import com.btestrs.android.data.TestRunEntity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -23,14 +28,19 @@ class TestViewModel : ViewModel() {
     private var cpuJob: Job? = null
     private val cpuMonitor = CpuMonitor()
     private var credentialStore: CredentialStore? = null
+    private var dao: TestRunDao? = null
+    private var rendererSettings: RendererSettings? = null
+    private var deviceId: String? = null
 
     fun init(context: Context) {
         if (credentialStore != null) return
         val store = CredentialStore(context)
         credentialStore = store
+        dao = AppDatabase.getInstance(context).testRunDao()
+        rendererSettings = RendererSettings(context)
+        deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         savedCredentials.value = store.loadAll()
 
-        // Restore last used credentials
         store.loadLast()?.let { last ->
             config.value = config.value.copy(
                 host = last.host,
@@ -43,7 +53,6 @@ class TestViewModel : ViewModel() {
     fun start(context: Context) {
         if (isRunning.value) return
 
-        // Save credentials if checkbox is checked
         if (saveCredentials.value) {
             val cfg = config.value
             credentialStore?.save(SavedCredential(cfg.host, cfg.username, cfg.password))
@@ -61,7 +70,6 @@ class TestViewModel : ViewModel() {
 
         job = viewModelScope.launch {
             btestRunner.run(config.value).collect { output ->
-                // Start CPU monitoring once we have the PID (on first output)
                 if (cpuJob == null) {
                     btestRunner.pid?.let { pid ->
                         cpuJob = viewModelScope.launch {
@@ -78,6 +86,7 @@ class TestViewModel : ViewModel() {
                     }
                     is BtestOutput.Summary -> {
                         summary.value = output.summary
+                        saveRun(output.summary)
                     }
                     is BtestOutput.Error -> {
                         error.value = output.message
@@ -86,6 +95,62 @@ class TestViewModel : ViewModel() {
             }
             isRunning.value = false
             cpuJob?.cancel()
+        }
+    }
+
+    private fun saveRun(s: BtestSummary) {
+        val cfg = config.value
+        val currentIntervals = intervals.value
+        viewModelScope.launch {
+            try {
+                val run = TestRunEntity(
+                    timestamp = System.currentTimeMillis(),
+                    server = cfg.host,
+                    protocol = s.proto,
+                    direction = s.dir,
+                    durationSec = s.durationSec,
+                    txAvgMbps = s.txAvgMbps,
+                    rxAvgMbps = s.rxAvgMbps,
+                    txBytes = s.txBytes,
+                    rxBytes = s.rxBytes,
+                    lost = s.lost
+                )
+                val intervalEntities = currentIntervals.map { iv ->
+                    TestIntervalEntity(
+                        runId = 0,
+                        intervalSec = iv.intervalSec,
+                        direction = iv.direction,
+                        speedMbps = iv.speedMbps,
+                        bytes = iv.bytes,
+                        localCpu = iv.localCpu,
+                        remoteCpu = iv.remoteCpu,
+                        lost = iv.lost
+                    )
+                }
+                dao?.insertRunWithIntervals(run, intervalEntities)
+                // Auto-sync if enabled
+                syncNewRun()
+            } catch (_: Exception) {
+                // Don't crash the app if DB write fails
+            }
+        }
+    }
+
+    private fun syncNewRun() {
+        val cfg = rendererSettings?.load() ?: return
+        if (!cfg.isConfigured || !cfg.syncEnabled) return
+        viewModelScope.launch {
+            try {
+                val unsynced = dao?.getUnsyncedRuns() ?: return@launch
+                for (run in unsynced) {
+                    val intervals = dao?.getIntervalsForRun(run.id) ?: continue
+                    val json = JsonExporter.exportSingle(run, intervals, deviceId)
+                    val result = ResultPoster.postSingle(cfg.url, cfg.apiKey, json)
+                    if (result.isSuccess) {
+                        dao?.markSynced(listOf(run.id))
+                    }
+                }
+            } catch (_: Exception) { }
         }
     }
 

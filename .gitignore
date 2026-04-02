@@ -13,3 +13,4 @@ local.properties
 *.aab
 *.hprof
 .DS_Store
+.env

@@ -72,12 +72,6 @@ fun TestScreen(viewModel: TestViewModel, modifier: Modifier = Modifier) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "btest",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-
         // Saved credentials dropdown
         if (savedCredentials.isNotEmpty()) {
             CredentialSelector(savedCredentials, isRunning, viewModel)
@@ -307,17 +301,24 @@ private fun ConfigSection(
         }
     }
 
-    // Duration slider
+    // Duration slider (non-linear)
+    val durationSteps = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600)
+    val currentIndex = durationSteps.indexOfFirst { it >= config.duration }.let {
+        if (it < 0) durationSteps.lastIndex else it
+    }
     Column {
         Text(
-            "Duration: ${config.duration}s",
+            "Duration: ${formatDuration(config.duration)}",
             style = MaterialTheme.typography.bodyMedium
         )
         Slider(
-            value = config.duration.toFloat(),
-            onValueChange = { viewModel.updateConfig { c -> c.copy(duration = it.toInt()) } },
-            valueRange = 10f..120f,
-            steps = 21,
+            value = currentIndex.toFloat(),
+            onValueChange = { idx ->
+                val dur = durationSteps[idx.toInt().coerceIn(0, durationSteps.lastIndex)]
+                viewModel.updateConfig { c -> c.copy(duration = dur) }
+            },
+            valueRange = 0f..(durationSteps.lastIndex).toFloat(),
+            steps = durationSteps.size - 2,
             enabled = !isRunning
         )
     }
@@ -436,4 +437,11 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1_000_000 -> String.format("%.2f MB", bytes / 1_000_000.0)
     bytes >= 1_000 -> String.format("%.2f KB", bytes / 1_000.0)
     else -> "$bytes B"
+}
+
+private fun formatDuration(seconds: Int): String = when {
+    seconds >= 3600 -> "${seconds / 3600}h"
+    seconds >= 60 && seconds % 60 == 0 -> "${seconds / 60}m"
+    seconds >= 60 -> "${seconds / 60}m ${seconds % 60}s"
+    else -> "${seconds}s"
 }
