@@ -13,13 +13,26 @@ jobs:
         uses: https://code.forgejo.org/actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: https://code.forgejo.org/actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+        run: |
+          apt-get update && apt-get install -y wget unzip
+          wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jdk_x64_linux_hotspot_17.0.13_11.tar.gz -O /tmp/jdk.tar.gz
+          mkdir -p /opt/java
+          tar -xzf /tmp/jdk.tar.gz -C /opt/java --strip-components=1
+          echo "JAVA_HOME=/opt/java" >> $GITHUB_ENV
+          echo "/opt/java/bin" >> $GITHUB_PATH
 
       - name: Setup Android SDK
-        uses: https://github.com/android-actions/setup-android@v3
+        run: |
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdtools.zip
+          mkdir -p /opt/android/cmdline-tools
+          unzip -q /tmp/cmdtools.zip -d /opt/android/cmdline-tools
+          mv /opt/android/cmdline-tools/cmdline-tools /opt/android/cmdline-tools/latest
+          yes | /opt/android/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          /opt/android/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=/opt/android" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/opt/android" >> $GITHUB_ENV
+          echo "/opt/android/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "/opt/android/platform-tools" >> $GITHUB_PATH
 
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
