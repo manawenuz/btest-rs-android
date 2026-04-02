@@ -9,13 +9,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y git wget unzip nodejs
+
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
 
       - name: Set up JDK 17
         run: |
-          apt-get update && apt-get install -y wget unzip
-          wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13%2B11/OpenJDK17U-jdk_x64_linux_hotspot_17.0.13_11.tar.gz -O /tmp/jdk.tar.gz
+          wget -q https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13+11/OpenJDK17U-jdk_x64_linux_hotspot_17.0.13_11.tar.gz -O /tmp/jdk.tar.gz
           mkdir -p /opt/java
           tar -xzf /tmp/jdk.tar.gz -C /opt/java --strip-components=1
           echo "JAVA_HOME=/opt/java" >> $GITHUB_ENV
