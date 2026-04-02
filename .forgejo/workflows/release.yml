@@ -77,4 +77,28 @@ jobs:
             -H "Authorization: token ${GITEA_TOKEN}" \
             -F "attachment=@btest-${TAG}-debug.apk"
 
-          echo "Uploaded both APKs to release ${TAG}"
+          echo "Uploaded both APKs to Forgejo release ${TAG}"
+
+      - name: Install GitHub CLI
+        run: |
+          wget -q https://github.com/cli/cli/releases/download/v2.67.0/gh_2.67.0_linux_amd64.tar.gz -O /tmp/gh.tar.gz
+          tar -xzf /tmp/gh.tar.gz -C /tmp
+          cp /tmp/gh_2.67.0_linux_amd64/bin/gh /usr/local/bin/gh
+
+      - name: Upload to GitHub Release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          gh release create "${TAG}" \
+            --repo manawenuz/btest-rs-android \
+            --title "${TAG}" \
+            --notes "Automated build for ${TAG}." \
+            "btest-${TAG}-release.apk" \
+            "btest-${TAG}-debug.apk" \
+          || gh release upload "${TAG}" \
+            --repo manawenuz/btest-rs-android \
+            --clobber \
+            "btest-${TAG}-release.apk" \
+            "btest-${TAG}-debug.apk"
+          echo "Uploaded both APKs to GitHub release ${TAG}"
