@@ -8,6 +8,10 @@ MikroTik Bandwidth Test (btest) client for Android — native Material3 UI wrapp
 |--------|---------|---------|
 | ![config](docs/screenshots/config.png) | ![running](docs/screenshots/running.png) | ![results](docs/screenshots/results.png) |
 
+| History | Detail | Dashboard |
+|---------|--------|-----------|
+| ![history](docs/screenshots/history.png) | ![detail](docs/screenshots/detail.png) | ![dashboard](docs/screenshots/dashboard.png) |
+
 ## Features
 
 - TCP and UDP bandwidth testing against MikroTik-compatible servers

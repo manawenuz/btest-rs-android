@@ -13,8 +13,17 @@ android {
         applicationId = "com.btestrs.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "0.03"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "btestrs2024"
+            keyAlias = "btest"
+            keyPassword = "btestrs2024"
+        }
     }
 
     buildTypes {
@@ -25,6 +34,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
