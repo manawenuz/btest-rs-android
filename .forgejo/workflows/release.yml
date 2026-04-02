@@ -24,11 +24,11 @@ jobs:
           echo "JAVA_HOME=/opt/java" >> $GITHUB_ENV
           echo "/opt/java/bin" >> $GITHUB_PATH
 
-      - name: Install Gradle
+      - name: Pre-download Gradle distribution
         run: |
-          wget -q https://github.com/gradle/gradle/releases/download/v8.11.1/gradle-8.11.1-bin.zip -O /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /opt
-          echo "/opt/gradle-8.11.1/bin" >> $GITHUB_PATH
+          wget --timeout=120 -q https://services.gradle.org/distributions/gradle-8.11.1-bin.zip -O /tmp/gradle-8.11.1-bin.zip \
+            || wget --timeout=120 -q https://downloads.gradle-dn.com/distributions/gradle-8.11.1-bin.zip -O /tmp/gradle-8.11.1-bin.zip
+          sed -i 's|distributionUrl=.*|distributionUrl=file\\:///tmp/gradle-8.11.1-bin.zip|' gradle/wrapper/gradle-wrapper.properties
 
       - name: Setup Android SDK
         run: |
@@ -47,10 +47,10 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
       - name: Build debug APK
-        run: gradle assembleDebug
+        run: ./gradlew assembleDebug
 
       - name: Build release APK
-        run: gradle assembleRelease
+        run: ./gradlew assembleRelease
         env:
           KEYSTORE_FILE: release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
