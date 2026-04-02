@@ -8,11 +8,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: cimg/android:2024.11
     steps:
       - name: Checkout
         uses: https://code.forgejo.org/actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: https://code.forgejo.org/actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: https://github.com/android-actions/setup-android@v3
 
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
@@ -33,7 +40,7 @@ jobs:
           TAG: ${{ github.ref_name }}
           GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           FORGEJO_URL: https://git.tbs.amn.gg
-          REPO: manawenuz/btest-rs-anrdoid
+          REPO: manawenuz/btest-rs-android
         run: |
           cp app/build/outputs/apk/release/app-release.apk "btest-${TAG}-release.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "btest-${TAG}-debug.apk"
