@@ -19,6 +19,8 @@ sealed class BtestOutput {
 class BtestRunner(private val context: Context) {
 
     private var process: Process? = null
+    var pid: Int? = null
+        private set
 
     private val binaryPath: String
         get() = "${context.applicationInfo.nativeLibraryDir}/libbtest.so"
@@ -33,6 +35,7 @@ class BtestRunner(private val context: Context) {
         try {
             val proc = pb.start()
             process = proc
+            pid = getPid(proc)
 
             val reader = BufferedReader(InputStreamReader(proc.inputStream))
             var line: String?
@@ -61,6 +64,24 @@ class BtestRunner(private val context: Context) {
     fun stop() {
         process?.destroyForcibly()
         process = null
+        pid = null
+    }
+
+    private fun getPid(process: Process): Int? {
+        return try {
+            // Android API 26+ (our minSdk is 24, but most devices are 26+)
+            val method = process.javaClass.getMethod("pid")
+            method.invoke(process) as Int
+        } catch (_: Exception) {
+            try {
+                // Fallback for older APIs
+                val field = process.javaClass.getDeclaredField("pid")
+                field.isAccessible = true
+                field.getInt(process)
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
     companion object {

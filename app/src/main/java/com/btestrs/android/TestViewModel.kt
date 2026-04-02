@@ -33,14 +33,19 @@ class TestViewModel : ViewModel() {
         val btestRunner = BtestRunner(context)
         runner = btestRunner
 
-        cpuJob = viewModelScope.launch {
-            cpuMonitor.monitor().collect { cpu ->
-                localCpu.value = cpu
-            }
-        }
-
         job = viewModelScope.launch {
             btestRunner.run(config.value).collect { output ->
+                // Start CPU monitoring once we have the PID (on first output)
+                if (cpuJob == null) {
+                    btestRunner.pid?.let { pid ->
+                        cpuJob = viewModelScope.launch {
+                            cpuMonitor.monitorProcess(pid).collect { cpu ->
+                                localCpu.value = cpu
+                            }
+                        }
+                    }
+                }
+
                 when (output) {
                     is BtestOutput.Interval -> {
                         intervals.value = intervals.value + output.result
@@ -62,6 +67,7 @@ class TestViewModel : ViewModel() {
         runner?.stop()
         job?.cancel()
         cpuJob?.cancel()
+        cpuJob = null
         isRunning.value = false
     }
 
